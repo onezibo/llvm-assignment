@@ -67,9 +67,19 @@ struct FuncPtrPass : public ModulePass {
   
   bool runOnModule(Module &M) override {
     errs() << "Hello: ";
-    errs().write_escaped(M.getName()) << '\n';
-    M.dump();
-    errs()<<"------------------------------\n";
+    //errs().write_escaped(M.getName()) << '\n';
+    //M.dump();
+    //errs()<<"------------------------------\n";
+    //依次遍历直到instruction
+    for(Module::iterator it_mod = M.begin(),it_mod_e = M.end();it_mod!=it_mod_e;it_mod++){
+      for(Function::iterator it_func = it_mod->begin(),it_func_e = it_mod->end();it_func!=it_func_e;it_func++){
+        for(BasicBlock::iterator it_bb=it_func->begin(),it_bb_e=it_func->end();it_bb!=it_bb_e;it_bb++){
+          CallInst *callinst = dyn_cast<CallInst>(it_bb);
+          Function *func = callinst->getParent().getParent();
+          errs() << "" << '\n';
+        }
+      }
+    }
     return false;
   }
 };

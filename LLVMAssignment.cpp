@@ -67,26 +67,27 @@ struct FuncPtrPass : public ModulePass {
   
   bool runOnModule(Module &M) override {
     errs() << "Hello: ";
-    //errs().write_escaped(M.getName()) << '\n';
-    //M.dump();
-    //errs()<<"------------------------------\n";
+    errs().write_escaped(M.getName()) << '\n';
+    M.dump();
+    errs()<<"------------------------------\n";
     //依次遍历到instruction
     for(Module::iterator it_mod = M.begin(),it_mod_e = M.end();it_mod!=it_mod_e;it_mod++){
       for(Function::iterator it_func = it_mod->begin(),it_func_e = it_mod->end();it_func!=it_func_e;it_func++){
         for(BasicBlock::iterator it_bb=it_func->begin(),it_bb_e=it_func->end();it_bb!=it_bb_e;it_bb++){
           Instruction *inst = dyn_cast<Instruction>(it_bb);
+          //errs() << inst->getDebugLoc().getLine() << inst->getName() << ":" << '\n';
           //判断是否为函数调用指令
-          if(isa<CallInst>(inst)){
-            CallInst *callinst = dyn_cast<CallInst>(inst);
-            Function *func = callinst->getCalledFunction();
-            //直接调用
-            if(func){
-              errs() << inst->getDebugLoc().getLine() << func->getName() << ":" << '\n';
-            }
-            else{
-              getFunction(callinst);//获取指令函数并打印
-            }
-          }
+          // if(isa<CallInst>(inst)){
+          //   CallInst *callinst = dyn_cast<CallInst>(inst);
+          //   Function *func = callinst->getCalledFunction();
+          //   //直接调用
+          //   if(func){
+          //     errs() << inst->getDebugLoc().getLine() << func->getName() << ":" << '\n';
+          //   }
+          //   else{
+          //     getFunction(callinst);//获取指令函数并打印
+          //   }
+          // }
         }
       }
     }
@@ -94,6 +95,9 @@ struct FuncPtrPass : public ModulePass {
   }
 
   void getFunction(CallInst *callinst){
+    // Value *callptr = callinst->getCalledValue();
+    // if(){
+    // }
   }
 };
 

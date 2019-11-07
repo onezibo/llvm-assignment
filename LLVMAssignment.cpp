@@ -18,7 +18,7 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/ToolOutputFile.h>
-
+#include <llvm/IR/Instructions.h>//注意有是Instructions.h不是Instruction.h
 #include <llvm/Transforms/Scalar.h>
 
 #include <llvm/IR/Function.h>
@@ -73,21 +73,24 @@ struct FuncPtrPass : public ModulePass {
     //依次遍历到instruction
     for(Module::iterator it_mod = M.begin(),it_mod_e = M.end();it_mod!=it_mod_e;it_mod++){
       for(Function::iterator it_func = it_mod->begin(),it_func_e = it_mod->end();it_func!=it_func_e;it_func++){
+        //errs() << "Basic block name=" << it_func->getName().str() << "\n";
         for(BasicBlock::iterator it_bb=it_func->begin(),it_bb_e=it_func->end();it_bb!=it_bb_e;it_bb++){
-          Instruction *inst = dyn_cast<Instruction>(it_bb);
-          //errs() << inst->getDebugLoc().getLine() << inst->getName() << ":" << '\n';
+          //outs() << *it_bb << "\n";
+          Instruction *inst = &(*it_bb);
+          //errs() << inst->getName() << "    " << inst->getOpcode() << "\n";
           //判断是否为函数调用指令
-          // if(isa<CallInst>(inst)){
-          //   CallInst *callinst = dyn_cast<CallInst>(inst);
-          //   Function *func = callinst->getCalledFunction();
-          //   //直接调用
-          //   if(func){
-          //     errs() << inst->getDebugLoc().getLine() << func->getName() << ":" << '\n';
-          //   }
-          //   else{
-          //     getFunction(callinst);//获取指令函数并打印
-          //   }
-          // }
+          if(isa<CallInst>(inst) || isa<InvokeInst>(inst)){
+            CallInst *callinst = dyn_cast<CallInst>(inst);
+            const Function *func = callinst->getCalledFunction();
+            //直接调用
+            if(func){
+              errs() << inst->getDebugLoc().getLine() << " : "<< func->getName() << '\n';
+            }
+            else{
+              //从间接调用获取类型，使用getCalledValue代替getCalledFunction
+              getFunction(callinst);//获取指令函数并打印
+            }
+          }
         }
       }
     }
@@ -95,8 +98,22 @@ struct FuncPtrPass : public ModulePass {
   }
 
   void getFunction(CallInst *callinst){
-    // Value *callptr = callinst->getCalledValue();
-    // if(){
+    Type* t = callinst->getCalledValue()->getType(); 
+    FunctionType* ft = cast<FunctionType>(cast<PointerType>(t)->getElementType()); 
+    ft->dump();
+    // Value *callvalue = callinst->getCalledValue();
+    // errs()<<"callinst ====== "<<*callinst<<"\n";
+    // for(Use &U : callinst->operands()){
+    //   Value *v = U.get();
+    //   auto v_begin = v->user_begin();
+    //   auto v_end = v->user_end();
+    //   for(;v_begin!=v_end;v_begin++){
+    //     //v_begin->dump();
+    //     errs()<<"v->getName()"<<v_begin->getName()<<"\n";
+    //     if(v_begin->getName().equals("call")){
+    //       if(PHINode )
+    //     }
+    //   }
     // }
   }
 };

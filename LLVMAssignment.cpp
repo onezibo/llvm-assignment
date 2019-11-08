@@ -101,6 +101,36 @@ struct FuncPtrPass : public ModulePass {
     Type* t = callinst->getCalledValue()->getType(); 
     FunctionType* ft = cast<FunctionType>(cast<PointerType>(t)->getElementType()); 
     ft->dump();
+    Value *v = callinst->getCalledValue();
+    Value* sv = v->stripPointerCasts();
+    StringRef fname = sv->getName();
+    errs()<<"fname:"<<fname<<"\n";
+    // auto val = callinst->ArgumentVal;
+    // errs()<<"val = "<<val<<"\n";
+    //test01.c
+    if(isa<PHINode>(v)){
+      PHINode *phinode = dyn_cast<PHINode>(v);
+      // errs()<<"!!!!!!!!!!!!!!!!!!!!!!!!!"<<"\n";
+      // phinode->dump();
+      // errs()<<"!!!!!!!!!!!!!!!!!!!!!!!!!"<<"\n";
+      // StringRef phiname = phinode->getName();
+      // StringRef opcodename = phinode->getOpcodeName();
+      //phinode->getParent()->dump();
+      auto incomingval = phinode->incoming_values();
+      auto *begin = incomingval.begin();
+      auto *end = incomingval.end();
+      for(;begin!=end;begin++){
+        if(isa<Function>(begin)){
+          Function *incomingfunc = dyn_cast<Function>(begin);
+          errs()<< callinst->getDebugLoc().getLine() << " : "<< incomingfunc->getName()<<"\n";
+        }
+      }
+      //StringRef operandname = phinode->getOperand(phinode->getNumOperands())->getName();
+      // errs()<<"phiname = "<<phiname<<"\n";
+      // errs()<<"opcodename = "<<opcodename<<"\n";
+      //errs()<<"operandname = "<<operandname<<"\n";
+    }
+    
     // Value *callvalue = callinst->getCalledValue();
     // errs()<<"callinst ====== "<<*callinst<<"\n";
     // for(Use &U : callinst->operands()){

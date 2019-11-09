@@ -135,11 +135,6 @@ struct FuncPtrPass : public ModulePass {
           PHINode *func = dyn_cast<PHINode>(user_b);
           setPhinode(func,callinst);
         }
-        if (CallInst *arguCall = dyn_cast<CallInst>(user_b)) {
-          errs() << "come to argument_Argument\n";
-          errs() << callinst->getDebugLoc().getLine() << " : "
-                 << arguCall->getName() << "\n"; //打印出clever
-        }
       }
     }
     // Value *callvalue = callinst->getCalledValue();

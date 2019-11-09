@@ -172,6 +172,7 @@ struct FuncPtrPass : public ModulePass {
         errs() << callinst->getDebugLoc().getLine() << " : "
                << incomingfunc->getName() << "\n";
       }
+      
     }
     // StringRef operandname =
     // phinode->getOperand(phinode->getNumOperands())->getName();

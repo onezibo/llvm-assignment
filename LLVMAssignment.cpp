@@ -66,7 +66,7 @@ struct FuncPtrPass : public ModulePass {
   bool runOnModule(Module &M) override {
     errs() << "Hello: ";
     errs().write_escaped(M.getName()) << '\n';
-    M.dump();
+    // M.dump();
     errs() << "------------------------------\n";
     //依次遍历到instruction
     for (Module::iterator it_mod = M.begin(), it_mod_e = M.end();
@@ -74,17 +74,20 @@ struct FuncPtrPass : public ModulePass {
       for (Function::iterator it_func = it_mod->begin(),
                               it_func_e = it_mod->end();
            it_func != it_func_e; it_func++) {
-        // errs() << "Basic block name=" << it_func->getName().str() << "\n";
+        // errs() << "Basic block name = " << it_func->getName().str() << "\n";
         for (BasicBlock::iterator it_bb = it_func->begin(),
                                   it_bb_e = it_func->end();
              it_bb != it_bb_e; it_bb++) {
           // outs() << *it_bb << "\n";
           Instruction *inst = &(*it_bb);
-          // errs() << inst->getName() << "    " << inst->getOpcode() << "\n";
+          // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName() <<"\n";
           //判断是否为函数调用指令
           if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
             CallInst *callinst = dyn_cast<CallInst>(inst);
             const Function *func = callinst->getCalledFunction();
+            // 跳过 llvm.开头的函数
+            if(func && func->isIntrinsic())
+              continue;
             //直接调用
             if (func) {
               errs() << inst->getDebugLoc().getLine() << " : "
@@ -101,11 +104,14 @@ struct FuncPtrPass : public ModulePass {
   }
 
   void getFunction(CallInst *callinst) {
-    Type *t = callinst->getCalledValue()->getType();
+    // errs() << " getFunction \n";
+    Value *v = callinst->getCalledValue();
+    Type *t = v->getType();
     FunctionType *ft =
         cast<FunctionType>(cast<PointerType>(t)->getElementType());
-    ft->dump();
-    Value *v = callinst->getCalledValue();
+    if(ft==NULL)
+      errs() << " hhhhhhhhhhhhhh \n";
+    // ft->dump(); 
     Value *sv = v->stripPointerCasts();
     StringRef fname = sv->getName();
     errs() << "fname:" << fname << "\n";
@@ -122,14 +128,14 @@ struct FuncPtrPass : public ModulePass {
     else if (isa<Argument>(v)) {
       errs() << "come to argument\n";
       Argument *argument = dyn_cast<Argument>(v);
-      argument->dump();
+      // argument->dump();
       auto users = argument->getParent()->users();
       auto user_b = users.begin()->op_begin();
       auto user_e = users.begin()->op_end();
       // auto arguFunc_b = arguFunc->user_begin();
       // auto arguFunc_e = arguFunc->user_end();
       for (; user_b != user_e; user_b++) {
-        user_b->getUser()->dump();
+        // user_b->getUser()->dump();
         if(isa<PHINode>(user_b)){
           errs() << "come to argument_PHINode\n";
           PHINode *func = dyn_cast<PHINode>(user_b);

@@ -203,8 +203,9 @@ struct FuncPtrPass : public ModulePass {
   void Build_Call_Graph(CallInst *root_procedure) {
     nodes.clear();
     n_set.clear();
-    nodes.push_back(root_procedure->getFunction());
-    n_set.push_back(root_procedure->getFunction());
+    errs() << "root_procedure = " << root_procedure << "\n";
+    nodes.push_back(root_procedure);
+    n_set.push_back(root_procedure);
     edgs.clear();
     change = true;
     while (change) {
@@ -223,8 +224,7 @@ struct FuncPtrPass : public ModulePass {
             } else {
               isinvoking = false;
             }
-            if (PVBinds.count[PVVs[i]] > 0 && isinvoking &&
-                PVBinds[PVVs[i]] != PVBinds[PVVs[j]]) {
+            if (isinvoking && PVBinds[PVVs[i]] != PVBinds[PVVs[j]]) {
               std::vector<Value *> temp;
               sort(PVBinds[PVVs[i]].begin(), PVBinds[PVVs[i]].end());
               sort(PVBinds[PVVs[j]].begin(), PVBinds[PVVs[j]].end());
@@ -261,40 +261,40 @@ struct FuncPtrPass : public ModulePass {
         }
       }
     }
-  };
+  }
+};
 
-  char FuncPtrPass::ID = 0;
-  static RegisterPass<FuncPtrPass> X("funcptrpass",
-                                     "Print function call instruction");
+char FuncPtrPass::ID = 0;
+static RegisterPass<FuncPtrPass> X("funcptrpass",
+                                   "Print function call instruction");
 
-  static cl::opt<std::string>
-      InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::init(""));
+static cl::opt<std::string>
+    InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::init(""));
 
-  int main(int argc, char **argv) {
-    LLVMContext &Context = getGlobalContext();
-    SMDiagnostic Err;
-    // Parse the command line to read the Inputfilename
-    cl::ParseCommandLineOptions(
-        argc, argv,
-        "FuncPtrPass \n My first LLVM too which does not do much.\n");
+int main(int argc, char **argv) {
+  LLVMContext &Context = getGlobalContext();
+  SMDiagnostic Err;
+  // Parse the command line to read the Inputfilename
+  cl::ParseCommandLineOptions(
+      argc, argv, "FuncPtrPass \n My first LLVM too which does not do much.\n");
 
-    // Load the input module
-    std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context);
-    if (!M) {
-      Err.print(argv[0], errs());
-      return 1;
-    }
+  // Load the input module
+  std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context);
+  if (!M) {
+    Err.print(argv[0], errs());
+    return 1;
+  }
 
-    llvm::legacy::PassManager Passes;
+  llvm::legacy::PassManager Passes;
 
 /// Remove functions' optnone attribute in LLVM5.0
 #if LLVM_VERSION_MAJOR == 5
-    Passes.add(new EnableFunctionOptPass());
+  Passes.add(new EnableFunctionOptPass());
 #endif
-    /// Transform it to SSA
-    Passes.add(llvm::createPromoteMemoryToRegisterPass());
+  /// Transform it to SSA
+  Passes.add(llvm::createPromoteMemoryToRegisterPass());
 
-    /// Your pass to print Function and Call Instructions
-    Passes.add(new FuncPtrPass());
-    Passes.run(*M.get());
-  }
+  /// Your pass to print Function and Call Instructions
+  Passes.add(new FuncPtrPass());
+  Passes.run(*M.get());
+}

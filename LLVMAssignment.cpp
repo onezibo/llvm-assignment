@@ -89,7 +89,7 @@ struct FuncPtrPass : public ModulePass {
         for (BasicBlock::iterator it_bb = it_func->begin(),
                                   it_bb_e = it_func->end();
              it_bb != it_bb_e; it_bb++) {
-          // outs() << *it_bb << "\n";
+          // errs() << *it_bb << "\n";
           Instruction *inst = &(*it_bb);
           // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName()
           // <<"\n";
@@ -105,6 +105,9 @@ struct FuncPtrPass : public ModulePass {
             if (func) {
               errs() << inst->getDebugLoc().getLine() << " : "
                      << func->getName() << '\n';
+                     PVCalls
+              PVCalls.insert(std::pair<Value*,Value*>(it_func->users().begin().getUse().get(),func->users().begin().getUse().get()));
+              // PVCalls.insert(std::pair<Value*,Value*>(NULL,NULL));
             } else {
               //从间接调用获取类型，使用getCalledValue代替getCalledFunction
               // getFunction(callinst); //获取指令函数并打印
@@ -203,16 +206,35 @@ struct FuncPtrPass : public ModulePass {
   void Build_Call_Graph(CallInst *root_procedure) {
     nodes.clear();
     n_set.clear();
-    errs() << "root_procedure = " << root_procedure << "\n";
-    nodes.push_back(root_procedure);
-    n_set.push_back(root_procedure);
+    Value *v = root_procedure->getCalledValue();
+    // v->dump();
+
+    nodes.push_back(v);
+    n_set.push_back(v);
     edgs.clear();
     change = true;
+    for (int i = 0; i < n_set.size(); i++) {
+      Value *v_temp = n_set[i];
+      if (isa<PHINode>(v_temp)) {
+        PHINode *phinode = dyn_cast<PHINode>(v_temp);
+        std::vector<Value *> temp;
+        temp.push_back(phinode);
+        PVVals.insert(
+            std::pair<Value *, std::vector<Value *>>(root_procedure, temp));
+      } else if (isa<Argument>(v_temp)) {
+        PHINode *phinode = dyn_cast<PHINode>(v_temp);
+        std::vector<Value *> temp;
+        temp.push_back(phinode);
+        PVBinds.insert(
+            std::pair<Value *, std::vector<Value *>>(root_procedure, temp));
+      }
+    }
+
     while (change) {
       change = false;
       bool more = true;
       while (more) {
-        change = false;
+        more = false;
         for (int i = 0; i < PVVs.size(); i++) {
           for (int j = i + 1; j < PVVs.size(); j++) {
             bool isinvoking;
@@ -261,6 +283,13 @@ struct FuncPtrPass : public ModulePass {
         }
       }
     }
+    if (edgs.empty())
+      errs() << "edgs empty\n";
+    std::map<Value *, Value *>::iterator iter;
+    for (iter = edgs.begin(); iter != edgs.end(); iter++)
+
+      errs() << iter->first->getName() << ' ' << iter->second->getName()
+             << "\n";
   }
 };
 

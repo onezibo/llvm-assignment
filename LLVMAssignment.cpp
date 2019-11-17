@@ -11,7 +11,6 @@
 // in docs/WritingAnLLVMPass.html
 //
 //===----------------------------------------------------------------------===//
-
 #include <llvm/IR/Instructions.h> //注意有是Instructions.h不是Instruction.h
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -20,6 +19,9 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/ToolOutputFile.h>
 #include <llvm/Transforms/Scalar.h>
+#include <map>
+#include <string>
+#include <vector>
 
 #include <llvm/IR/Function.h>
 #include <llvm/Pass.h>
@@ -63,6 +65,15 @@ struct FuncPtrPass : public ModulePass {
   static char ID; // Pass identification, replacement for typeid
   FuncPtrPass() : ModulePass(ID) {}
 
+  std::vector<Value *> nodes;
+  std::vector<Value *> n_set;
+  std::map<Value *, Value *> edgs;
+  std::vector<Value *> PVVs;
+  std::map<Value *, Value *> PVCalls;
+  std::map<Value *, std::vector<Value *>> PVBinds;
+  std::map<Value *, std::vector<Value *>> PVVals;
+  bool change;
+
   bool runOnModule(Module &M) override {
     errs() << "Hello: ";
     errs().write_escaped(M.getName()) << '\n';
@@ -80,21 +91,24 @@ struct FuncPtrPass : public ModulePass {
              it_bb != it_bb_e; it_bb++) {
           // outs() << *it_bb << "\n";
           Instruction *inst = &(*it_bb);
-          // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName() <<"\n";
+          // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName()
+          // <<"\n";
           //判断是否为函数调用指令
           if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
             CallInst *callinst = dyn_cast<CallInst>(inst);
             const Function *func = callinst->getCalledFunction();
             // 跳过 llvm.开头的函数
-            if(func && func->isIntrinsic())
+            if (func && func->isIntrinsic())
               continue;
+
             //直接调用
             if (func) {
               errs() << inst->getDebugLoc().getLine() << " : "
                      << func->getName() << '\n';
             } else {
               //从间接调用获取类型，使用getCalledValue代替getCalledFunction
-              getFunction(callinst); //获取指令函数并打印
+              // getFunction(callinst); //获取指令函数并打印
+              Build_Call_Graph(callinst);
             }
           }
         }
@@ -109,9 +123,9 @@ struct FuncPtrPass : public ModulePass {
     Type *t = v->getType();
     FunctionType *ft =
         cast<FunctionType>(cast<PointerType>(t)->getElementType());
-    if(ft==NULL)
+    if (ft == NULL)
       errs() << " hhhhhhhhhhhhhh \n";
-    // ft->dump(); 
+    // ft->dump();
     Value *sv = v->stripPointerCasts();
     StringRef fname = sv->getName();
     errs() << "fname:" << fname << "\n";
@@ -136,10 +150,10 @@ struct FuncPtrPass : public ModulePass {
       // auto arguFunc_e = arguFunc->user_end();
       for (; user_b != user_e; user_b++) {
         // user_b->getUser()->dump();
-        if(isa<PHINode>(user_b)){
+        if (isa<PHINode>(user_b)) {
           errs() << "come to argument_PHINode\n";
           PHINode *func = dyn_cast<PHINode>(user_b);
-          setPhinode(func,callinst);
+          setPhinode(func, callinst);
         }
       }
     }
@@ -178,7 +192,6 @@ struct FuncPtrPass : public ModulePass {
         errs() << callinst->getDebugLoc().getLine() << " : "
                << incomingfunc->getName() << "\n";
       }
-      
     }
     // StringRef operandname =
     // phinode->getOperand(phinode->getNumOperands())->getName();
@@ -186,39 +199,102 @@ struct FuncPtrPass : public ModulePass {
     // errs()<<"opcodename = "<<opcodename<<"\n";
     // errs()<<"operandname = "<<operandname<<"\n";
   }
-};
 
-char FuncPtrPass::ID = 0;
-static RegisterPass<FuncPtrPass> X("funcptrpass",
-                                   "Print function call instruction");
+  void Build_Call_Graph(CallInst *root_procedure) {
+    nodes.clear();
+    n_set.clear();
+    nodes.push_back(root_procedure->getFunction());
+    n_set.push_back(root_procedure->getFunction());
+    edgs.clear();
+    change = true;
+    while (change) {
+      change = false;
+      bool more = true;
+      while (more) {
+        change = false;
+        for (int i = 0; i < PVVs.size(); i++) {
+          for (int j = i + 1; j < PVVs.size(); j++) {
+            bool isinvoking;
+            std::vector<Value *>::iterator it;
+            it =
+                find(PVBinds[PVVs[i]].begin(), PVBinds[PVVs[i]].end(), PVVs[i]);
+            if (it != PVBinds[PVVs[i]].end()) {
+              isinvoking = true;
+            } else {
+              isinvoking = false;
+            }
+            if (PVBinds.count[PVVs[i]] > 0 && isinvoking &&
+                PVBinds[PVVs[i]] != PVBinds[PVVs[j]]) {
+              std::vector<Value *> temp;
+              sort(PVBinds[PVVs[i]].begin(), PVBinds[PVVs[i]].end());
+              sort(PVBinds[PVVs[j]].begin(), PVBinds[PVVs[j]].end());
+              temp.resize(PVBinds[PVVs[i]].size() + PVBinds[PVVs[j]].size());
+              merge(PVBinds[PVVs[i]].begin(), PVBinds[PVVs[i]].end(),
+                    PVBinds[PVVs[j]].begin(), PVBinds[PVVs[j]].end(),
+                    temp.begin());
+              PVBinds[PVVs[i]] = temp;
+              more = true;
+            }
+          }
+        }
+      }
+      std::map<Value *, Value *>::iterator iter;
+      for (iter = PVCalls.begin(); iter != PVCalls.end(); iter++) {
+        std::vector<Value *>::iterator it;
+        for (it = PVVals[iter->second].begin();
+             it != PVVals[iter->second].end(); it++) // iter->second为q
+        {
+          nodes.push_back(*it);
+          edgs.insert(std::pair<Value *, Value *>(iter->first, *it));
+          n_set.push_back(*it);
+        }
+        for (it = PVBinds[iter->second].begin();
+             it != PVBinds[iter->second].end(); it++) {
+          std::vector<Value *>::iterator it_v;
+          for (it_v = PVVals[*it].begin(); it_v != PVVals[*it].end();
+               it_v++) // iter->second为q
+          {
+            nodes.push_back(*it_v);
+            edgs.insert(std::pair<Value *, Value *>(iter->first, *it_v));
+            n_set.push_back(*it_v);
+          }
+        }
+      }
+    }
+  };
 
-static cl::opt<std::string>
-    InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::init(""));
+  char FuncPtrPass::ID = 0;
+  static RegisterPass<FuncPtrPass> X("funcptrpass",
+                                     "Print function call instruction");
 
-int main(int argc, char **argv) {
-  LLVMContext &Context = getGlobalContext();
-  SMDiagnostic Err;
-  // Parse the command line to read the Inputfilename
-  cl::ParseCommandLineOptions(
-      argc, argv, "FuncPtrPass \n My first LLVM too which does not do much.\n");
+  static cl::opt<std::string>
+      InputFilename(cl::Positional, cl::desc("<filename>.bc"), cl::init(""));
 
-  // Load the input module
-  std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context);
-  if (!M) {
-    Err.print(argv[0], errs());
-    return 1;
-  }
+  int main(int argc, char **argv) {
+    LLVMContext &Context = getGlobalContext();
+    SMDiagnostic Err;
+    // Parse the command line to read the Inputfilename
+    cl::ParseCommandLineOptions(
+        argc, argv,
+        "FuncPtrPass \n My first LLVM too which does not do much.\n");
 
-  llvm::legacy::PassManager Passes;
+    // Load the input module
+    std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context);
+    if (!M) {
+      Err.print(argv[0], errs());
+      return 1;
+    }
+
+    llvm::legacy::PassManager Passes;
 
 /// Remove functions' optnone attribute in LLVM5.0
 #if LLVM_VERSION_MAJOR == 5
-  Passes.add(new EnableFunctionOptPass());
+    Passes.add(new EnableFunctionOptPass());
 #endif
-  /// Transform it to SSA
-  Passes.add(llvm::createPromoteMemoryToRegisterPass());
+    /// Transform it to SSA
+    Passes.add(llvm::createPromoteMemoryToRegisterPass());
 
-  /// Your pass to print Function and Call Instructions
-  Passes.add(new FuncPtrPass());
-  Passes.run(*M.get());
-}
+    /// Your pass to print Function and Call Instructions
+    Passes.add(new FuncPtrPass());
+    Passes.run(*M.get());
+  }

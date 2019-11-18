@@ -109,7 +109,9 @@ struct FuncPtrPass : public ModulePass {
           }
           if (isa<PHINode>(inst)) {
             PHINode *phi_t = dyn_cast<PHINode>(inst);
-            errs() << "hhhhhhhhhhhh     " << inst->getName() << "\n";
+            std::set<std::string> vals = setPhinode(phi_t);
+            pvvals(inst->getName(), vals);
+            errs() << "pvvals instname    " << inst->getName() << "\n";
             // PVBinds.insert();
           }
           //判断是否为函数调用指令
@@ -124,6 +126,8 @@ struct FuncPtrPass : public ModulePass {
                 // errs()<<"call user name "<<arg->getUser()->getName()<<"\n";
                 // errs() << "call getcallee name "
                 //        << callinst->getCalledValue()->getName() << "\n";
+                errs() << "func name " << callinst->getCalledValue()->getName() << "\n";
+
                 Function *f = stof[callinst->getCalledValue()->getName()];
                 Argument *arg_initial = f->arg_begin();
                 int j = 0;
@@ -131,8 +135,11 @@ struct FuncPtrPass : public ModulePass {
                   arg_initial++;
                   j++;
                 }
-
+                errs() << "hhhhhhhhhhhhhhhhh\n";
+                if (arg_initial == f->arg_end())
+                  continue;
                 if (arg_initial->getType()->isPointerTy()) {
+                  errs() << "jjjjjjjjjjjjjjjjjj\n";
                   // errs() << "ffffffffffffffffffffffffff\n";
                   // for (Value::user_iterator u = arg->user_begin();
                   //      u != arg->user_end(); u++)
@@ -182,7 +189,14 @@ struct FuncPtrPass : public ModulePass {
               Value *v = callinst->getCalledValue();
               stoc.insert(
                   std::pair<std::string, CallInst *>(v->getName(), callinst));
-              getFunction(v, callinst); //获取指令函数并打印
+              std::set<std::string> callset =
+                  getFunction(v); //获取指令函数并打印
+              std::set<std::string>::iterator it_cs;
+              errs() << v->getName() << "  ";
+              for (it_cs = callset.begin(); it_cs != callset.end(); it_cs++) {
+                errs() << *it_cs << ",";
+              }
+              errs() << "\n";
               // errs() << "it_mod->getName()==" << it_mod->getName() << " "
               //        << "callinst->getCalledValue()->getName()===="
               //        << callinst->getCalledValue()->getName() << "\n";
@@ -225,45 +239,21 @@ struct FuncPtrPass : public ModulePass {
   //   PVBinds.insert(std::pair<std::string, std::string>());
   // }
 
-  void getFunction(Value *v, CallInst *callinst) {
-    // // errs() << " getFunction \n";
-    // Value *v = callinst->getCalledValue();
-    Type *t = v->getType();
-    FunctionType *ft =
-        cast<FunctionType>(cast<PointerType>(t)->getElementType());
-    // if (ft == NULL)
-    //   errs() << " hhhhhhhhhhhhhh \n";
-    // ft->dump();
-    Value *sv = v->stripPointerCasts();
-    StringRef fname = sv->getName();
-    // errs() << "fname:" << fname << "\n";
-    // auto val = callinst->ArgumentVal;
-    // errs()<<"val = "<<val<<"\n";
+  std::set<std::string> getFunction(Value *v) {
+    std::set<std::string> res;
     // test01.c
     // test05.c需对PHInode进行递归处理
     if (isa<PHINode>(v)) {
       // errs() << "come to phinode\n";
       PHINode *phinode = dyn_cast<PHINode>(v);
-      setPhinode(phinode, callinst);
+      res = setPhinode(phinode);
     } else if (isa<CallInst>(v)) {
       // errs() << "cccccccccccccccccccccccc\n";
       auto ci = dyn_cast<CallInst>(v);
       // errs() << "callinst name    " << v->getName() << "\n";
-      errs() << "call name    " << ci->getCalledValue()->getName() << "\n";
       std::string ret = functoret[ci->getCalledValue()->getName()];
-      std::string s = PVBinds[ret];
-      std::map<std::string, std::string>::iterator it_p;
-      for (it_p = PVBinds.begin(); it_p != PVBinds.end(); it_p++) {
-        errs() << "!!!!!!!!!         " << it_p->first << "     " << it_p->second
-               << "          "
-               << "\n";
-      }
-      setLine(callinst, s);
-
-      // CallInst *inst = dyn_cast<CallInst>(v);
-      // Value *return_v = callinst->getCalledValue();
-      // getFunction(return_v, callinst);
-      // process(inst);
+      errs() << "ret name    " << ret << "\n";
+      res.insert(ret);
     }
     //函数指针作为参数传入给函数
     else if (isa<Argument>(v)) {
@@ -282,17 +272,46 @@ struct FuncPtrPass : public ModulePass {
           if (isa<PHINode>(user_b)) {
             // errs() << "come to argument_PHINode\n";
             PHINode *func = dyn_cast<PHINode>(user_b);
-            setPhinode(func, callinst);
+            res = setPhinode(func);
           } else if (isa<Argument>(user_b) &&
                      (user_b->get()->getType()->isPointerTy())) {
             Value *v = user_b->get();
-            getFunction(v, callinst);
+            res = getFunction(v);
           }
         }
       }
     }
+    return res;
   }
 
+  void pvvals(std::string s, std::set<std::string> sset) {
+    std::set<std::string> uniset;
+    std::set<std::string> func_temp;
+    if (PVVals.find(s) != PVVals.end()) {
+      func_temp = PVVals[s];
+      std::set_union(func_temp.begin(), func_temp.end(), sset.begin(),
+                     sset.end(), std::inserter(uniset, uniset.begin()));
+      PVVals[s] = uniset;
+    } else {
+      uniset = sset;
+      PVVals.insert(std::pair<std::string, std::set<std::string>>(s, uniset));
+    }
+  }
+
+  void setLine(CallInst *callinst, std::set<std::string> sset) {
+    std::set<std::string> uniset;
+    std::set<std::string> func_temp;
+    if (line.find(callinst->getDebugLoc().getLine()) != line.end()) {
+      func_temp = line[callinst->getDebugLoc().getLine()];
+      std::set_union(func_temp.begin(), func_temp.end(), sset.begin(),
+                     sset.end(), std::inserter(uniset, uniset.begin()));
+      line[callinst->getDebugLoc().getLine()] = uniset;
+    } else {
+      uniset = sset;
+      line.insert(std::pair<unsigned int, std::set<std::string>>(
+          callinst->getDebugLoc().getLine(), uniset));
+    }
+  }
   void setLine(CallInst *callinst, std::string s) {
     std::set<std::string> func_temp;
     if (line.find(callinst->getDebugLoc().getLine()) != line.end()) {
@@ -306,7 +325,7 @@ struct FuncPtrPass : public ModulePass {
     }
   }
 
-  std::set<std::string> setPhinode(PHINode *phinode, CallInst *callinst) {
+  std::set<std::string> setPhinode(PHINode *phinode) {
     llvm::User::op_range incomingval = phinode->incoming_values();
     auto *begin = incomingval.begin();
     auto *end = incomingval.end();
@@ -314,71 +333,21 @@ struct FuncPtrPass : public ModulePass {
     for (; begin != end; begin++) {
       if (isa<PHINode>(begin)) {
         PHINode *temp = dyn_cast<PHINode>(begin);
+        std::set<std::string> nextphi = setPhinode(temp);
         std::set<std::string> x;
-        std::set_union(
-            result.begin(), result.end(), setPhinode(temp, callinst).begin(),
-            setPhinode(temp, callinst).end(), std::inserter(x, x.begin()));
+        std::set_union(result.begin(), result.end(), nextphi.begin(),
+                       nextphi.end(), std::inserter(x, x.begin()));
         result = x;
-        // setPhinode(temp, callinst);
       } else if (isa<Function>(begin)) {
         Function *incomingfunc = dyn_cast<Function>(begin);
-        result.insert(callinst->getCalledValue()->getName());
-        return result;
-        // if (PVVals.count(callinst->getCalledValue()->getName())) {
-          // PVVals[callinst->getCalledValue()->getName()].insert(
-          //     incomingfunc->getName());
-          // PVVals.insert(std::pair<std::string, std::set<std::string>>(
-          //     callinst->getCalledValue()->getName(),
-          //     PVVals[callinst->getCalledValue()->getName()]));
-          // setLine(callinst, incomingfunc->getName());
-          // std::set<std::string> func_temp;
-          // if (line.find(callinst->getDebugLoc().getLine()) !=
-          //     line.end()) { // if (!line.empty())
-          //   func_temp = line[callinst->getDebugLoc().getLine()];
-          //   func_temp.insert(incomingfunc->getName());
-          //   line[callinst->getDebugLoc().getLine()] = func_temp;
-          // } else {
-          //   func_temp.insert(incomingfunc->getName());
-          //   line.insert(std::pair<unsigned int, std::set<std::string>>(
-          //       callinst->getDebugLoc().getLine(), func_temp));
-          // }
-          // errs() << "-----------incomingfunc->getName()---------"
-          //        << incomingfunc->getName() << "\n";
-        // } else {
-        //   std::set<std::string> temp;
-        //   temp.insert(incomingfunc->getName());
-        //   PVVals.insert(std::pair<std::string, std::set<std::string>>(
-        //       callinst->getCalledValue()->getName(), temp));
-          // setLine(callinst, incomingfunc->getName());
-          // std::set<std::string> func_temp;
-          // if (line.find(callinst->getDebugLoc().getLine()) !=
-          //     line.end()) { // if (!line.empty())
-          //   func_temp = line[callinst->getDebugLoc().getLine()];
-          //   func_temp.insert(incomingfunc->getName());
-          //   line[callinst->getDebugLoc().getLine()] = func_temp;
-          // } else {
-          //   func_temp.insert(incomingfunc->getName());
-          //   line.insert(std::pair<unsigned int, std::set<std::string>>(
-          //       callinst->getDebugLoc().getLine(), func_temp));
-          // }
-          // errs() << "-----------incomingfunc->getName()---------"
-          //        << incomingfunc->getName() << "\n";
-        // }
+        result.insert(incomingfunc->getName());
+
       } else if (isa<Argument>(begin)) {
-        // getFunction(begin->get(), callinst);
+        // getFunction(begin->get());
         result.insert(begin->get()->getName());
-        return result;
       }
-
-      // errs() << callinst->getDebugLoc().getLine() << " : "
-      //        << incomingfunc->getName() << "\n";
     }
-
-    // StringRef operandname =
-    // phinode->getOperand(phinode->getNumOperands())->getName();
-    // errs()<<"phiname = "<<phiname<<"\n";
-    // errs()<<"opcodename = "<<opcodename<<"\n";
-    // errs()<<"operandname = "<<operandname<<"\n";
+    return result;
   }
 
   void Build_Call_Graph(CallInst *root_procedure) {

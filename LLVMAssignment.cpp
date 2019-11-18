@@ -82,24 +82,54 @@ struct FuncPtrPass : public ModulePass {
     //依次遍历到instruction
     for (Module::iterator it_mod = M.begin(), it_mod_e = M.end();
          it_mod != it_mod_e; it_mod++) {
+      Function *f = &(*it_mod);
+      for(Argument* it_args = f->arg_begin(); 
+        it_args != f->arg_end(); it_args ++){
+        Argument *arg = &(*it_args);
+        if(arg->getType()->isPointerTy()){
+          errs()<<"ffffffffffffffffffffffffff\n";
+          for(Value::user_iterator u = arg->user_begin();u!=arg->user_end(); u++ )
+            errs()<<"arg user name "<<u->getName()<<"\n";
+          for(Value::use_iterator us = arg->use_begin(); us!=arg->use_end();us++ )
+            errs()<<"arg user use name "<<us->get()->getName()<<"\n";
+        }
+      }
+        // errs()<<"-----------------------------------\n";
       for (Function::iterator it_func = it_mod->begin(),
                               it_func_e = it_mod->end();
            it_func != it_func_e; it_func++) {
         // errs() << "Basic block name = " << it_func->getName().str() << "\n";
-        // errs()<<"-----------------------------------\n";
         for (BasicBlock::iterator it_bb = it_func->begin(),
                                   it_bb_e = it_func->end();
              it_bb != it_bb_e; it_bb++) {
-          errs() << *it_bb << "\n";
+          // errs() << *it_bb << "\n";
           Instruction *inst = &(*it_bb);
           // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName()  
           // <<"\n";
           //判断是否为函数调用指令
-          // if(isa<BinaryOperator>(inst))
-          //   errs()<<"bbbbbbbbbbbbbbbbb\n";
+          if(isa<ReturnInst>(inst)){
+            ReturnInst *ri = dyn_cast<ReturnInst>(inst);
+            errs()<<"fuc "<<f->getName()<<"   return "<<ri->getReturnValue()->getName() << "\n";
+          }
           if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
             CallInst *callinst = dyn_cast<CallInst>(inst);
-            // process(callinst);
+            for(User::op_iterator arg = callinst->arg_begin(), int i = 0; arg!=callinst->arg_end(); arg++, i++){
+              if(arg->get()->getType()->isPointerTy()){
+                errs()<<"-----------------------------\n";
+                errs()<<"call arg name "<<arg->get()->getName()<<"\n";
+                // errs()<<"call user name "<<arg->getUser()->getName()<<"\n";
+                errs()<<"call getcallee name "<<callinst->getCalledValue()->getName()<<"\n"; 
+                Function
+
+                // for(Value::user_iterator u = arg->user_begin();u!=arg->user_end(); u++ )
+                //   errs()<<"arg user name "<<u->getName()<<"\n";
+                // for(Value::use_iterator us = arg->use_begin(); us!=arg->use_end();us++ )
+                //   errs()<<"arg user use name "<<us->get()->getName()<<"\n";
+              }
+            }
+            process(callinst);
+
+
             // const Function *func = callinst->getCalledFunction();
             // // 跳过 llvm.开头的函数
             // if (func && func->isIntrinsic())
@@ -163,9 +193,12 @@ struct FuncPtrPass : public ModulePass {
     }
     else if(isa<CallInst>(v)){
       errs()<<"cccccccccccccccccccccccc\n";
-      CallInst *inst = dyn_cast<CallInst>(v);
-      Value *return_v = callinst->getCalledValue();
-      getFunction(return_v, callinst);
+      auto ci = dyn_cast<CallInst>(v);
+      errs()<<"callinst name    "<<v->getName() << "\n";
+      errs()<<"call name    "<<ci->getCalledValue()->getName() << "\n";
+      // CallInst *inst = dyn_cast<CallInst>(v);
+      // Value *return_v = callinst->getCalledValue();
+      // getFunction(return_v, callinst);
       // process(inst);
     }
     //函数指针作为参数传入给函数
@@ -241,7 +274,6 @@ struct FuncPtrPass : public ModulePass {
                << incomingfunc->getName() << "\n";
       }else if (isa<Argument>(begin)){
         getFunction(begin->get(), callinst);
-        break;
       }
     }
     // StringRef operandname =

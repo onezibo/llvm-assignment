@@ -86,49 +86,72 @@ struct FuncPtrPass : public ModulePass {
                               it_func_e = it_mod->end();
            it_func != it_func_e; it_func++) {
         // errs() << "Basic block name = " << it_func->getName().str() << "\n";
+        // errs()<<"-----------------------------------\n";
         for (BasicBlock::iterator it_bb = it_func->begin(),
                                   it_bb_e = it_func->end();
              it_bb != it_bb_e; it_bb++) {
-          // outs() << *it_bb << "\n";
+          errs() << *it_bb << "\n";
           Instruction *inst = &(*it_bb);
-          // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName()
+          // errs() << inst->getOpcode() << "  " <<  inst->getOpcodeName()  
           // <<"\n";
           //判断是否为函数调用指令
+          // if(isa<BinaryOperator>(inst))
+          //   errs()<<"bbbbbbbbbbbbbbbbb\n";
           if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
             CallInst *callinst = dyn_cast<CallInst>(inst);
-            const Function *func = callinst->getCalledFunction();
-            // 跳过 llvm.开头的函数
-            if (func && func->isIntrinsic())
-              continue;
+            // process(callinst);
+            // const Function *func = callinst->getCalledFunction();
+            // // 跳过 llvm.开头的函数
+            // if (func && func->isIntrinsic())
+            //   continue;
 
-            //直接调用
-            if (func) {
-              errs() << inst->getDebugLoc().getLine() << " : "
-                     << func->getName() << '\n';
-            } else {
-              //从间接调用获取类型，使用getCalledValue代替getCalledFunction
-              // getFunction(callinst); //获取指令函数并打印
-              Build_Call_Graph(callinst);
-            }
+            // //直接调用
+            // if (func) {
+            //   errs() << inst->getDebugLoc().getLine() << " : "
+            //          << func->getName() << '\n';
+            // } else {
+            //   //从间接调用获取类型，使用getCalledValue代替getCalledFunction
+            //   Value *v = callinst->getCalledValue();
+            //   // errs()<<v->getName() << "\n";
+            //   getFunction(v, callinst); //获取指令函数并打印
+            //   // Build_Call_Graph(callinst);
+            // }
           }
         }
       }
     }
     return false;
   }
+  void process(CallInst *inst){
+    CallInst *callinst = dyn_cast<CallInst>(inst);
+    const Function *func = callinst->getCalledFunction();
+    // 跳过 llvm.开头的函数
+    if (func && func->isIntrinsic())
+      return;
 
-  void getFunction(CallInst *callinst) {
+    //直接调用
+    if (func) {
+      errs() << inst->getDebugLoc().getLine() << " : "
+             << func->getName() << '\n';
+    } else {
+      //从间接调用获取类型，使用getCalledValue代替getCalledFunction
+      Value *v = callinst->getCalledValue();
+      // errs()<<v->getName() << "\n";
+      getFunction(v, callinst); //获取指令函数并打印
+      // Build_Call_Graph(callinst);
+    }
+  }
+  void getFunction(Value *v, CallInst *callinst) {
     // errs() << " getFunction \n";
-    Value *v = callinst->getCalledValue();
-    Type *t = v->getType();
-    FunctionType *ft =
-        cast<FunctionType>(cast<PointerType>(t)->getElementType());
-    if (ft == NULL)
-      errs() << " hhhhhhhhhhhhhh \n";
-    // ft->dump();
-    Value *sv = v->stripPointerCasts();
-    StringRef fname = sv->getName();
-    errs() << "fname:" << fname << "\n";
+    // Type *t = v->getType();
+    // FunctionType *ft =
+    //     cast<FunctionType>(cast<PointerType>(t)->getElementType());
+    // if (ft == NULL)
+    //   errs() << " hhhhhhhhhhhhhh \n";
+    // // ft->dump();
+    // Value *sv = v->stripPointerCasts();
+    // StringRef fname = sv->getName();
+    // errs() << "fname:" << fname << "\n";
     // auto val = callinst->ArgumentVal;
     // errs()<<"val = "<<val<<"\n";
     // test01.c
@@ -138,22 +161,47 @@ struct FuncPtrPass : public ModulePass {
       PHINode *phinode = dyn_cast<PHINode>(v);
       setPhinode(phinode, callinst);
     }
+    else if(isa<CallInst>(v)){
+      errs()<<"cccccccccccccccccccccccc\n";
+      CallInst *inst = dyn_cast<CallInst>(v);
+      Value *return_v = callinst->getCalledValue();
+      getFunction(return_v, callinst);
+      // process(inst);
+    }
     //函数指针作为参数传入给函数
     else if (isa<Argument>(v)) {
       errs() << "come to argument\n";
       Argument *argument = dyn_cast<Argument>(v);
       // argument->dump();
       auto users = argument->getParent()->users();
-      auto user_b = users.begin()->op_begin();
-      auto user_e = users.begin()->op_end();
-      // auto arguFunc_b = arguFunc->user_begin();
-      // auto arguFunc_e = arguFunc->user_end();
-      for (; user_b != user_e; user_b++) {
-        // user_b->getUser()->dump();
-        if (isa<PHINode>(user_b)) {
-          errs() << "come to argument_PHINode\n";
-          PHINode *func = dyn_cast<PHINode>(user_b);
-          setPhinode(func, callinst);
+      for(auto user = users.begin(); user != users.end(); user++){
+        errs()<<"user name : " << user->getName() << "\n";
+        auto user_b = user->op_begin();
+        auto user_e = user->op_end();
+        // auto arguFunc_b = arguFunc->user_begin();
+        // auto arguFunc_e = arguFunc->user_end();
+        for (; user_b != user_e; user_b++) {
+          // user_b->getUser()->dump();
+          if (isa<PHINode>(user_b)) {
+            errs() << "come to argument_PHINode\n";
+            PHINode *func = dyn_cast<PHINode>(user_b);
+            setPhinode(func, callinst);
+          }else if (isa<Argument>(user_b) && (user_b->get()->getType()->isPointerTy())){
+              Value *v = user_b->get();
+              getFunction(v, callinst);
+              // if (isa<PHINode>(v)) {
+              //   errs() << "come to aaaaaphinode\n";
+              //   PHINode *phinode = dyn_cast<PHINode>(v);
+              //   setPhinode(phinode, callinst);
+              // }
+              // else if(isa<CallInst>(v))
+              //   errs()<<"callinstsssssssssssssssssss\n";
+              // else if(isa<Function>(v))
+              //   errs()<<"funcsssssssssssssssssss\n";
+
+              // errs()<<"inner argment Type : " <<user_b->get()->getType()->getTypeID() << "\n";  
+              // errs()<<v->getName()<<"\n"; 
+          }
         }
       }
     }
@@ -191,6 +239,9 @@ struct FuncPtrPass : public ModulePass {
         Function *incomingfunc = dyn_cast<Function>(begin);
         errs() << callinst->getDebugLoc().getLine() << " : "
                << incomingfunc->getName() << "\n";
+      }else if (isa<Argument>(begin)){
+        getFunction(begin->get(), callinst);
+        break;
       }
     }
     // StringRef operandname =
@@ -207,11 +258,14 @@ struct FuncPtrPass : public ModulePass {
     nodes.push_back(root_procedure);
     n_set.push_back(root_procedure);
     edgs.clear();
+
     change = true;
+    errs()<<"jjjjj\n";
     while (change) {
       change = false;
       bool more = true;
       while (more) {
+        more = false;
         change = false;
         for (int i = 0; i < PVVs.size(); i++) {
           for (int j = i + 1; j < PVVs.size(); j++) {
@@ -220,6 +274,7 @@ struct FuncPtrPass : public ModulePass {
             it =
                 find(PVBinds[PVVs[i]].begin(), PVBinds[PVVs[i]].end(), PVVs[i]);
             if (it != PVBinds[PVVs[i]].end()) {
+              errs()<<"isinvoking\n";
               isinvoking = true;
             } else {
               isinvoking = false;
